@@ -73,6 +73,10 @@ def autoconnect(f):
     return _autoconnect
 
 
+class ProtocolException(Exception):
+    pass
+
+
 class Uploader(object):
     def __init__(self, device):
         self.device = device
@@ -81,6 +85,7 @@ class Uploader(object):
 
     def try_connect(self):
         self.con = None
+        print("Connecting to bootloader...")
         self.con = serial.Serial(
             self.device,
             baudrate=57600,
@@ -92,7 +97,12 @@ class Uploader(object):
             dsrdtr=0,
             rtscts=0)
 
-        self.get_sync()
+        for x in range(3):
+            try:
+                self.get_sync()
+                break
+            except:
+                pass
         print("Major: {}".format(self.get_parameter(STK_SW_MAJOR)))
         print("Minor: {}".format(self.get_parameter(STK_SW_MINOR)))
         print("Signature: 0x{:02x}{:02x}{:02x}".format(*self.read_sign()))
@@ -190,9 +200,9 @@ class Uploader(object):
             Sync_CRC_EOP)
         self.write(pkt)
         if self.readbyte() != Resp_STK_INSYNC:
-            raise Exception("load_addr() can't get into sync")
+            raise ProtocolException("load_addr() can't get into sync")
         if self.readbyte() != Resp_STK_OK:
-            raise Exception("load_addr() protocol error")
+            raise ProtocolException("load_addr() protocol error")
 
     def prog_page(self, memtype, data):
         debug_print("[STK500] Prog page")
@@ -209,9 +219,9 @@ class Uploader(object):
         pkt += struct.pack("B", Sync_CRC_EOP)
         self.write(pkt)
         if self.readbyte() != Resp_STK_INSYNC:
-            raise Exception("prog_page() can't get into sync")
+            raise ProtocolException("prog_page() can't get into sync")
         if self.readbyte() != Resp_STK_OK:
-            raise Exception("prog_page() protocol error")
+            raise ProtocolException("prog_page() protocol error")
 
     def read_page(self, memtype, data):
         debug_print("[STK500] Read page")
@@ -227,10 +237,10 @@ class Uploader(object):
         )
         self.write(pkt)
         if self.readbyte() != Resp_STK_INSYNC:
-            raise Exception("read_page() can't get into sync")
+            raise ProtocolException("read_page() can't get into sync")
         data[:] = self.read(block_size)
         if self.readbyte() != Resp_STK_OK:
-            raise Exception("read_page() protocol error")
+            raise ProtocolException("read_page() protocol error")
 
     def get_sync(self):
         debug_print("[STK500] Get sync")
@@ -241,33 +251,33 @@ class Uploader(object):
             self.write(pkt)
             try:
                 if self.readbyte() != Resp_STK_INSYNC:
-                    raise Exception("read_page() can't get into sync")
+                    raise ProtocolException("read_page() can't get into sync")
                 if self.readbyte() != Resp_STK_OK:
-                    raise Exception("read_page() protocol error")
+                    raise ProtocolException("read_page() protocol error")
                 print("Connected to bootloader")
                 return
             except Exception as e:
                 pass
-        raise Exception("STK500: cannot get sync")
+        raise ProtocolException("STK500: cannot get sync")
 
     def get_parameter(self, param):
         debug_print("[STK500] Get parameter {:x}".format(param))
         self.write(struct.pack("BBB", STK_GET_PARAMETER, param, Sync_CRC_EOP))
         if self.readbyte() != Resp_STK_INSYNC:
-            raise Exception("get_parameter() can't get into sync")
+            raise ProtocolException("get_parameter() can't get into sync")
         val = self.readbyte()
         if self.readbyte() != Resp_STK_OK:
-            raise Exception("get_parameter() protocol error")
+            raise ProtocolException("get_parameter() protocol error")
         return val
 
     def read_sign(self):
         debug_print("[STK500] Read signature")
         self.write(struct.pack("BB", STK_READ_SIGN, Sync_CRC_EOP))
         if self.readbyte() != Resp_STK_INSYNC:
-            raise Exception("read_sign() can't get into sync")
+            raise ProtocolException("read_sign() can't get into sync")
         sign = struct.unpack("BBB", self.read(3))
         if self.readbyte() != Resp_STK_OK:
-            raise Exception("read_sign() protocol error")
+            raise ProtocolException("read_sign() protocol error")
         return sign
 
     def leave_progmode(self):
@@ -277,9 +287,9 @@ class Uploader(object):
             Sync_CRC_EOP)
         self.write(pkt)
         if self.readbyte() != Resp_STK_INSYNC:
-            raise Exception("leave_progmode() can't get into sync")
+            raise ProtocolException("leave_progmode() can't get into sync")
         if self.readbyte() != Resp_STK_OK:
-            raise Exception("leave_progmode() protocol error")
+            raise ProtocolException("leave_progmode() protocol error")
 
     def readbyte(self):
         while True:
@@ -325,6 +335,8 @@ def upload(device, filename):
         try:
             Uploader(device).upload(filename)
             break
+        except ProtocolException as e:
+            print(e)
         except Exception as e:
             print(e)
             sleep(1)
