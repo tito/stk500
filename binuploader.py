@@ -295,12 +295,15 @@ class Uploader(object):
         while True:
             ret = self.read(1)
             if ret != b'!':
-                return struct.unpack("B", ret)[0]
+                b = struct.unpack("B", ret)[0]
+                return b
 
             buf = b''
             index = 0
             while True:
+                # print("readbyte line")
                 ret = self.read(1)
+                # print("ret=", ret)
                 if ret == b'\n':
                     if buf:
                         buf = buf.replace(b'\r', '')
@@ -314,7 +317,8 @@ class Uploader(object):
         while read < size:
             ret = self.con.read(size - read)
             if ret == "":
-                raise Exception("no data read, timeout?")
+                raise Exception("no data read, timeout? (read={} wanted={})".format(
+                    read, size))
             buf[read:read + len(ret)] = ret
             read += len(ret)
         return bytes(buf[:read])
